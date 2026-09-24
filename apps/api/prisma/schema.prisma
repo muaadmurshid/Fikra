@@ -1,7 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Fikra database schema
 
 generator client {
   provider = "prisma-client"
@@ -24,5 +21,159 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  projects Project[]
+
   @@map("users")
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  ownerId     String
+  title       String
+  description String
+  status      ProjectStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  owner          User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  analyses       ProjectAnalysis[]
+  clarifications ClarificationQuestion[]
+  suggestions    ProjectSuggestion[]
+  technologies   ProjectTechnology[]
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ProjectAnalysis {
+  id        String @id @default(uuid())
+  projectId String
+
+  summary           String
+  problemStatement  String?
+  targetUsers       String?
+  coreFeatures      Json
+  functionalReqs    Json?
+  nonFunctionalReqs Json?
+  assumptions       Json?
+  aiModel           String?
+  createdAt         DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_analyses")
+}
+
+model ClarificationQuestion {
+  id        String @id @default(uuid())
+  projectId String
+
+  question      String
+  questionOrder Int
+  isRequired    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  answer  ClarificationAnswer?
+
+  @@unique([projectId, questionOrder])
+  @@index([projectId])
+  @@map("clarification_questions")
+}
+
+model ClarificationAnswer {
+  id         String @id @default(uuid())
+  questionId String @unique
+
+  answer    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  question ClarificationQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("clarification_answers")
+}
+
+model ProjectSuggestion {
+  id        String @id @default(uuid())
+  projectId String
+
+  title       String
+  description String
+  reason      String?
+  status      SuggestionStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_suggestions")
+}
+
+model Technology {
+  id          String             @id @default(uuid())
+  name        String             @unique
+  category    TechnologyCategory
+  description String?
+  iconUrl     String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  projects ProjectTechnology[]
+
+  @@map("technologies")
+}
+
+model ProjectTechnology {
+  id           String @id @default(uuid())
+  projectId    String
+  technologyId String
+
+  recommendedByAi Boolean  @default(false)
+  selected        Boolean  @default(false)
+  reason          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  technology Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, technologyId])
+  @@index([projectId])
+  @@index([technologyId])
+  @@map("project_technologies")
+}
+
+enum ProjectStatus {
+  DRAFT
+  ANALYZING
+  CLARIFYING
+  SUGGESTING
+  CONFIRMED
+  ROADMAP_READY
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum TechnologyCategory {
+  LANGUAGE
+  FRONTEND
+  BACKEND
+  MOBILE
+  DATABASE
+  FRAMEWORK
+  LIBRARY
+  CLOUD
+  DEVOPS
+  TESTING
+  OTHER
 }
