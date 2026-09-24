@@ -26,6 +26,10 @@ model User {
   levelAttempts LevelAttempt[]
   hintUsages    HintUsage[]
 
+  fileVersions ProjectFileVersion[]
+  builds       ProjectBuild[]
+  exports      ProjectExport[]
+
   @@map("users")
 }
 
@@ -44,6 +48,10 @@ model Project {
   suggestions    ProjectSuggestion[]
   technologies   ProjectTechnology[]
   roadmaps       Roadmap[]
+
+  files   ProjectFile[]
+  builds  ProjectBuild[]
+  exports ProjectExport[]
 
   @@index([ownerId])
   @@map("projects")
@@ -208,9 +216,10 @@ model CodingLevel {
   dependencies     CodingLevelDependency[] @relation("DependentLevel")
   requiredByLevels CodingLevelDependency[] @relation("RequiredLevel")
 
-  progress LevelProgress[]
-  attempts LevelAttempt[]
-  hints    Hint[]
+  progress     LevelProgress[]
+  attempts     LevelAttempt[]
+  hints        Hint[]
+  fileVersions ProjectFileVersion[]
 
   @@unique([stageId, levelOrder])
   @@index([stageId])
@@ -311,6 +320,94 @@ model HintUsage {
   @@map("hint_usages")
 }
 
+model ProjectFile {
+  id        String @id @default(uuid())
+  projectId String
+
+  path      String
+  fileName  String
+  language  String?
+  isDeleted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions ProjectFileVersion[]
+
+  @@unique([projectId, path])
+  @@index([projectId])
+  @@map("project_files")
+}
+
+model ProjectFileVersion {
+  id      String  @id @default(uuid())
+  fileId  String
+  userId  String?
+  levelId String?
+
+  versionNumber Int
+  content       String
+  changeType    FileChangeType
+  changeSummary String?
+  generatedByAi Boolean        @default(false)
+
+  createdAt DateTime @default(now())
+
+  file  ProjectFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user  User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  level CodingLevel? @relation(fields: [levelId], references: [id], onDelete: SetNull)
+
+  @@unique([fileId, versionNumber])
+  @@index([fileId])
+  @@index([userId])
+  @@index([levelId])
+  @@map("project_file_versions")
+}
+
+model ProjectBuild {
+  id        String  @id @default(uuid())
+  projectId String
+  userId    String?
+
+  status       BuildStatus @default(PENDING)
+  buildNumber  Int
+  logs         String?
+  artifactPath String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, buildNumber])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_builds")
+}
+
+model ProjectExport {
+  id        String  @id @default(uuid())
+  projectId String
+  userId    String?
+
+  format      ExportFormat @default(ZIP)
+  status      ExportStatus @default(PENDING)
+  filePath    String?
+  fileSize    BigInt?
+  requestedAt DateTime     @default(now())
+  completedAt DateTime?
+  expiresAt   DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_exports")
+}
+
 enum ProjectStatus {
   DRAFT
   ANALYZING
@@ -362,4 +459,31 @@ enum LevelAttemptResult {
   PENDING
   PASSED
   FAILED
+}
+
+enum FileChangeType {
+  CREATED
+  UPDATED
+  DELETED
+  RESTORED
+}
+
+enum BuildStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ExportFormat {
+  ZIP
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  EXPIRED
 }
