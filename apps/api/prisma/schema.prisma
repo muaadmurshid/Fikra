@@ -30,6 +30,12 @@ model User {
   builds       ProjectBuild[]
   exports      ProjectExport[]
 
+  joinRequests        ProjectJoinRequest[]
+  projectMemberships  ProjectMember[]
+  levelAssignments    LevelAssignment[]
+  contributions       Contribution[]
+  contributionReviews ContributionReview[]
+
   @@map("users")
 }
 
@@ -52,6 +58,11 @@ model Project {
   files   ProjectFile[]
   builds  ProjectBuild[]
   exports ProjectExport[]
+
+  joinRequests  ProjectJoinRequest[]
+  members       ProjectMember[]
+  assignments   LevelAssignment[]
+  contributions Contribution[]
 
   @@index([ownerId])
   @@map("projects")
@@ -220,6 +231,7 @@ model CodingLevel {
   attempts     LevelAttempt[]
   hints        Hint[]
   fileVersions ProjectFileVersion[]
+  assignments  LevelAssignment[]
 
   @@unique([stageId, levelOrder])
   @@index([stageId])
@@ -341,10 +353,11 @@ model ProjectFile {
 }
 
 model ProjectFileVersion {
-  id      String  @id @default(uuid())
-  fileId  String
-  userId  String?
-  levelId String?
+  id             String  @id @default(uuid())
+  fileId         String
+  userId         String?
+  levelId        String?
+  contributionId String?
 
   versionNumber Int
   content       String
@@ -354,14 +367,16 @@ model ProjectFileVersion {
 
   createdAt DateTime @default(now())
 
-  file  ProjectFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  user  User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  level CodingLevel? @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  file         ProjectFile   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  level        CodingLevel?  @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  contribution Contribution? @relation(fields: [contributionId], references: [id], onDelete: SetNull)
 
   @@unique([fileId, versionNumber])
   @@index([fileId])
   @@index([userId])
   @@index([levelId])
+  @@index([contributionId])
   @@map("project_file_versions")
 }
 
@@ -406,6 +421,119 @@ model ProjectExport {
   @@index([projectId])
   @@index([userId])
   @@map("project_exports")
+}
+
+model ProjectJoinRequest {
+  id        String @id @default(uuid())
+  projectId String
+  userId    String
+
+  message    String?
+  status     JoinRequestStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  reviewedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([status])
+  @@map("project_join_requests")
+}
+
+model ProjectMember {
+  id        String @id @default(uuid())
+  projectId String
+  userId    String
+
+  role      ProjectMemberRole   @default(CONTRIBUTOR)
+  status    ProjectMemberStatus @default(ACTIVE)
+  joinedAt  DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  assignments LevelAssignment[]
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model LevelAssignment {
+  id        String @id @default(uuid())
+  projectId String
+  memberId  String
+  userId    String
+  levelId   String
+
+  status      AssignmentStatus @default(ASSIGNED)
+  assignedAt  DateTime         @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  dueAt       DateTime?
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  member  ProjectMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level   CodingLevel   @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  contributions Contribution[]
+
+  @@unique([projectId, levelId])
+  @@index([projectId])
+  @@index([memberId])
+  @@index([userId])
+  @@index([levelId])
+  @@map("level_assignments")
+}
+
+model Contribution {
+  id           String @id @default(uuid())
+  projectId    String
+  assignmentId String
+  userId       String
+
+  title       String
+  description String?
+  status      ContributionStatus @default(SUBMITTED)
+  submittedAt DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignment LevelAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reviews      ContributionReview[]
+  fileVersions ProjectFileVersion[]
+
+  @@index([projectId])
+  @@index([assignmentId])
+  @@index([userId])
+  @@index([status])
+  @@map("contributions")
+}
+
+model ContributionReview {
+  id             String @id @default(uuid())
+  contributionId String
+  reviewerId     String
+
+  decision  ReviewDecision
+  feedback  String?
+  createdAt DateTime       @default(now())
+
+  contribution Contribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+  reviewer     User         @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([contributionId])
+  @@index([reviewerId])
+  @@map("contribution_reviews")
 }
 
 enum ProjectStatus {
@@ -486,4 +614,45 @@ enum ExportStatus {
   COMPLETED
   FAILED
   EXPIRED
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ProjectMemberRole {
+  CONTRIBUTOR
+  REVIEWER
+  ADMIN
+}
+
+enum ProjectMemberStatus {
+  ACTIVE
+  INACTIVE
+  REMOVED
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
+  COMPLETED
+  CANCELLED
+}
+
+enum ContributionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum ReviewDecision {
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
 }
