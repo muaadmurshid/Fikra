@@ -81,6 +81,7 @@ export async function generateRoadmap(
     );
 
     const roadmap = await prisma.$transaction(async (tx) => {
+      // Deactivate any previous active roadmap.
       await tx.roadmap.updateMany({
         where: {
           projectId,
@@ -91,6 +92,7 @@ export async function generateRoadmap(
         },
       });
 
+      // Determine the next roadmap version.
       const latestRoadmap = await tx.roadmap.findFirst({
         where: {
           projectId,
@@ -105,6 +107,7 @@ export async function generateRoadmap(
 
       const version = (latestRoadmap?.version ?? 0) + 1;
 
+      // Create the new roadmap.
       const createdRoadmap = await tx.roadmap.create({
         data: {
           projectId,
@@ -117,6 +120,7 @@ export async function generateRoadmap(
 
       let previousLevelId: string | null = null;
 
+      // Create roadmap stages and coding levels.
       for (
         let stageIndex = 0;
         stageIndex < roadmapData.stages.length;
@@ -152,6 +156,37 @@ export async function generateRoadmap(
             },
           });
 
+          // Create three deterministic hints for every coding level.
+          await tx.hint.createMany({
+            data: [
+              {
+                levelId: level.id,
+                hintOrder: 1,
+                content:
+                  `Break "${levelData.title}" into the smallest ` +
+                  "working implementation first.",
+                xpCost: 0,
+              },
+              {
+                levelId: level.id,
+                hintOrder: 2,
+                content:
+                  "Review the level instructions carefully and use " +
+                  "the selected project technologies where appropriate.",
+                xpCost: 0,
+              },
+              {
+                levelId: level.id,
+                hintOrder: 3,
+                content:
+                  "Verify the current application still works before " +
+                  `considering "${levelData.title}" complete.`,
+                xpCost: 0,
+              },
+            ],
+          });
+
+          // Every level after the first depends on the previous level.
           if (previousLevelId) {
             await tx.codingLevelDependency.create({
               data: {
@@ -165,6 +200,7 @@ export async function generateRoadmap(
         }
       }
 
+      // Roadmap is now ready for gameplay initialization.
       await tx.project.update({
         where: {
           id: projectId,
@@ -190,6 +226,11 @@ export async function generateRoadmap(
                 },
                 include: {
                   dependencies: true,
+                  hints: {
+                    orderBy: {
+                      hintOrder: "asc",
+                    },
+                  },
                 },
               },
             },
@@ -271,6 +312,11 @@ export async function getRoadmap(
               },
               include: {
                 dependencies: true,
+                hints: {
+                  orderBy: {
+                    hintOrder: "asc",
+                  },
+                },
               },
             },
           },

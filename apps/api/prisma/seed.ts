@@ -74,7 +74,7 @@ const technologies = [
   },
 ];
 
-async function main() {
+async function seedTechnologies() {
   console.log("Seeding Fikra technology catalog...");
 
   for (const technology of technologies) {
@@ -95,6 +95,115 @@ async function main() {
   console.log(
     `Technology catalog ready: ${technologies.length} technologies.`
   );
+}
+
+async function seedRoadmapHints() {
+  console.log("Seeding hints for existing coding levels...");
+
+  const roadmaps = await prisma.roadmap.findMany({
+    where: {
+      isActive: true,
+    },
+    include: {
+      project: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+      stages: {
+        include: {
+          levels: true,
+        },
+      },
+    },
+  });
+
+  if (roadmaps.length === 0) {
+    console.log(
+      "No active roadmaps found. No existing hints need to be seeded."
+    );
+    return;
+  }
+
+  let levelCount = 0;
+  let hintCount = 0;
+
+  for (const roadmap of roadmaps) {
+    console.log(
+      `Adding hints to active roadmap: ${roadmap.project.title}`
+    );
+
+    const levels = roadmap.stages.flatMap(
+      (stage) => stage.levels
+    );
+
+    for (const level of levels) {
+      const hints = [
+        {
+          hintOrder: 1,
+          content:
+            `Break "${level.title}" into the smallest ` +
+            "working implementation first.",
+          xpCost: 0,
+        },
+        {
+          hintOrder: 2,
+          content:
+            "Review the level instructions carefully and use " +
+            "the selected project technologies where appropriate.",
+          xpCost: 0,
+        },
+        {
+          hintOrder: 3,
+          content:
+            "Verify the current application still works before " +
+            `considering "${level.title}" complete.`,
+          xpCost: 0,
+        },
+      ];
+
+      for (const hint of hints) {
+        await prisma.hint.upsert({
+          where: {
+            levelId_hintOrder: {
+              levelId: level.id,
+              hintOrder: hint.hintOrder,
+            },
+          },
+          update: {
+            content: hint.content,
+            xpCost: hint.xpCost,
+          },
+          create: {
+            levelId: level.id,
+            hintOrder: hint.hintOrder,
+            content: hint.content,
+            xpCost: hint.xpCost,
+          },
+        });
+
+        hintCount++;
+      }
+
+      levelCount++;
+    }
+
+    console.log(
+      `Hints ready for ${levels.length} levels in ${roadmap.project.title}.`
+    );
+  }
+
+  console.log(
+    `Roadmap hints ready: ${levelCount} levels, ${hintCount} hints.`
+  );
+}
+
+async function main() {
+  await seedTechnologies();
+  await seedRoadmapHints();
+
+  console.log("Fikra seed completed successfully.");
 }
 
 main()

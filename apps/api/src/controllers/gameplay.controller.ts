@@ -456,13 +456,20 @@ export async function completeLevel(
         throw new Error("LEVEL_NOT_IN_PROGRESS");
       }
 
-      const attemptCount = await tx.levelAttempt.count({
-        where: {
-          userId: req.userId!,
-          levelId,
-        },
-      });
+      const passedAttempt = await tx.levelAttempt.findFirst({
+  where: {
+    userId: req.userId!,
+    levelId,
+    result: "PASSED",
+  },
+  orderBy: {
+    attemptNumber: "desc",
+  },
+});
 
+if (!passedAttempt) {
+  throw new Error("NO_PASSED_ATTEMPT");
+}
       const completedProgress =
         await tx.levelProgress.update({
           where: {
@@ -477,18 +484,6 @@ export async function completeLevel(
             completedAt: new Date(),
           },
         });
-
-      await tx.levelAttempt.create({
-        data: {
-          userId: req.userId!,
-          levelId,
-          attemptNumber: attemptCount + 1,
-          result: "PASSED",
-          score: 100,
-          feedback: "Level completed successfully.",
-          completedAt: new Date(),
-        },
-      });
 
       const user = await tx.user.update({
         where: {
@@ -589,6 +584,17 @@ export async function completeLevel(
         message: "Start the level before completing it.",
       });
     }
+
+    if (
+  error instanceof Error &&
+  error.message === "NO_PASSED_ATTEMPT"
+) {
+  return res.status(409).json({
+    success: false,
+    message:
+      "A passed attempt is required before completing this level.",
+  });
+}
 
     console.error("Complete level failed:", error);
 

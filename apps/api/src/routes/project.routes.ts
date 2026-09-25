@@ -34,6 +34,12 @@ import {
   completeLevel,
 } from "../controllers/gameplay.controller";
 
+import {
+  getLevelHints,
+  useHint,
+  submitAttempt,
+} from "../controllers/level-interaction.controller";
+
 import { requireAuth } from "../middleware/auth.middleware";
 
 import { analyzeProject } from "../controllers/project-ai.controller";
@@ -124,6 +130,24 @@ router.post(
   "/:projectId/levels/:levelId/complete",
   requireAuth,
   completeLevel
+);
+
+router.get(
+  "/:projectId/levels/:levelId/hints",
+  requireAuth,
+  getLevelHints
+);
+
+router.post(
+  "/:projectId/levels/:levelId/hints/:hintId/use",
+  requireAuth,
+  useHint
+);
+
+router.post(
+  "/:projectId/levels/:levelId/attempts",
+  requireAuth,
+  submitAttempt
 );
 
 router.post("/", requireAuth, createProject);
