@@ -7,6 +7,15 @@ import {
   getProjects,
   updateProject,
 } from "../controllers/project.controller";
+
+import {
+  answerClarification,
+  confirmProject,
+  decideSuggestion,
+  getClarifications,
+  getSuggestions,
+} from "../controllers/project-definition.controller";
+
 import { requireAuth } from "../middleware/auth.middleware";
 
 import { analyzeProject } from "../controllers/project-ai.controller";
@@ -14,6 +23,37 @@ import { analyzeProject } from "../controllers/project-ai.controller";
 const router = Router();
 
 router.patch("/:projectId/archive", requireAuth, archiveProject);
+
+router.get(
+  "/:projectId/clarifications",
+  requireAuth,
+  getClarifications
+);
+
+router.post(
+  "/:projectId/clarifications/:questionId/answer",
+  requireAuth,
+  answerClarification
+);
+
+router.get(
+  "/:projectId/suggestions",
+  requireAuth,
+  getSuggestions
+);
+
+router.patch(
+  "/:projectId/suggestions/:suggestionId",
+  requireAuth,
+  decideSuggestion
+);
+
+router.post(
+  "/:projectId/confirm",
+  requireAuth,
+  confirmProject
+);
+
 router.post("/", requireAuth, createProject);
 router.get("/", requireAuth, getProjects);
 router.get("/:projectId", requireAuth, getProjectById);
