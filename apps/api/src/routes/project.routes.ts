@@ -40,6 +40,12 @@ import {
   submitAttempt,
 } from "../controllers/level-interaction.controller";
 
+import {
+  saveProjectFile,
+  getProjectFiles,
+  getProjectFileVersions,
+} from "../controllers/project-file.controller";
+
 import { requireAuth } from "../middleware/auth.middleware";
 
 import { analyzeProject } from "../controllers/project-ai.controller";
@@ -148,6 +154,24 @@ router.post(
   "/:projectId/levels/:levelId/attempts",
   requireAuth,
   submitAttempt
+);
+
+router.post(
+  "/:projectId/files",
+  requireAuth,
+  saveProjectFile
+);
+
+router.get(
+  "/:projectId/files",
+  requireAuth,
+  getProjectFiles
+);
+
+router.get(
+  "/:projectId/files/:fileId/versions",
+  requireAuth,
+  getProjectFileVersions
 );
 
 router.post("/", requireAuth, createProject);
