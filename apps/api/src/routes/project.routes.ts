@@ -16,6 +16,12 @@ import {
   getSuggestions,
 } from "../controllers/project-definition.controller";
 
+import {
+  getProjectTechnologies,
+  recommendTechnologies,
+  selectTechnology,
+} from "../controllers/technology.controller";
+
 import { requireAuth } from "../middleware/auth.middleware";
 
 import { analyzeProject } from "../controllers/project-ai.controller";
@@ -52,6 +58,24 @@ router.post(
   "/:projectId/confirm",
   requireAuth,
   confirmProject
+);
+
+router.post(
+  "/:projectId/technologies/recommend",
+  requireAuth,
+  recommendTechnologies
+);
+
+router.get(
+  "/:projectId/technologies",
+  requireAuth,
+  getProjectTechnologies
+);
+
+router.patch(
+  "/:projectId/technologies/:technologyId",
+  requireAuth,
+  selectTechnology
 );
 
 router.post("/", requireAuth, createProject);
