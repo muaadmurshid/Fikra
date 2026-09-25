@@ -22,6 +22,11 @@ import {
   selectTechnology,
 } from "../controllers/technology.controller";
 
+import {
+  generateRoadmap,
+  getRoadmap,
+} from "../controllers/roadmap.controller";
+
 import { requireAuth } from "../middleware/auth.middleware";
 
 import { analyzeProject } from "../controllers/project-ai.controller";
@@ -76,6 +81,18 @@ router.patch(
   "/:projectId/technologies/:technologyId",
   requireAuth,
   selectTechnology
+);
+
+router.post(
+  "/:projectId/roadmap/generate",
+  requireAuth,
+  generateRoadmap
+);
+
+router.get(
+  "/:projectId/roadmap",
+  requireAuth,
+  getRoadmap
 );
 
 router.post("/", requireAuth, createProject);
