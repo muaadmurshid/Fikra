@@ -27,6 +27,13 @@ import {
   getRoadmap,
 } from "../controllers/roadmap.controller";
 
+import {
+  initializeGameplay,
+  getGameplay,
+  startLevel,
+  completeLevel,
+} from "../controllers/gameplay.controller";
+
 import { requireAuth } from "../middleware/auth.middleware";
 
 import { analyzeProject } from "../controllers/project-ai.controller";
@@ -93,6 +100,30 @@ router.get(
   "/:projectId/roadmap",
   requireAuth,
   getRoadmap
+);
+
+router.post(
+  "/:projectId/gameplay/initialize",
+  requireAuth,
+  initializeGameplay
+);
+
+router.get(
+  "/:projectId/gameplay",
+  requireAuth,
+  getGameplay
+);
+
+router.post(
+  "/:projectId/levels/:levelId/start",
+  requireAuth,
+  startLevel
+);
+
+router.post(
+  "/:projectId/levels/:levelId/complete",
+  requireAuth,
+  completeLevel
 );
 
 router.post("/", requireAuth, createProject);
