@@ -343,9 +343,13 @@ export async function submitAttempt(
       });
     }
 
+   
     const evaluation = evaluateLevelAttemptMock({
-      submittedCode: parsed.data.submittedCode,
+        submittedCode: parsed.data.submittedCode,
+        levelTitle: context.level.title,
+        fileChanges: parsed.data.fileChanges,
     });
+
 
     const result = await prisma.$transaction(
       async (tx) => {
