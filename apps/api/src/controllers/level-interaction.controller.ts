@@ -342,9 +342,7 @@ export async function submitAttempt(
         message:
           "The level must be in progress before submitting an attempt.",
       });
-    }
-
-    
+    }  
     const safety = validateSubmissionSafety({
       submittedCode: parsed.data.submittedCode,
       levelTitle: context.level.title,
