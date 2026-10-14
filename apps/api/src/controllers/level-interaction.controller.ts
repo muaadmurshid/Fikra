@@ -1,5 +1,6 @@
 import { Response } from "express";
 
+import { validateSubmissionSafety } from "../services/submission-safety.service";
 import prisma from "../lib/prisma";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { submitAttemptSchema } from "../schemas/gameplay.schema";
@@ -343,6 +344,19 @@ export async function submitAttempt(
       });
     }
 
+    
+    const safety = validateSubmissionSafety({
+      submittedCode: parsed.data.submittedCode,
+      levelTitle: context.level.title,
+      fileChanges: parsed.data.fileChanges,
+    });
+
+    if (!safety.safe) {
+      return res.status(400).json({
+        success: false,
+        message: safety.message ?? "Unsafe submission.",
+      });
+    }
    
     const evaluation = evaluateLevelAttemptMock({
         submittedCode: parsed.data.submittedCode,
