@@ -4,6 +4,9 @@ import prisma from "../lib/prisma";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { submitAttemptSchema } from "../schemas/gameplay.schema";
 
+import { evaluateLevelAttemptMock } from "../services/mock-level-evaluator.service";
+import { saveProjectFileVersion } from "../services/project-file.service";
+
 async function getOwnedProjectLevel(
   projectId: string,
   levelId: string,
@@ -309,6 +312,13 @@ export async function submitAttempt(
       });
     }
 
+    if (context.project.status === "ARCHIVED") {
+      return res.status(409).json({
+        success: false,
+        message: "Archived projects cannot be modified.",
+      });
+    }
+
     const progress = await prisma.levelProgress.findUnique({
       where: {
         userId_levelId: {
@@ -333,36 +343,95 @@ export async function submitAttempt(
       });
     }
 
-    const attemptCount = await prisma.levelAttempt.count({
-      where: {
-        userId: req.userId,
-        levelId,
-      },
+    const evaluation = evaluateLevelAttemptMock({
+      submittedCode: parsed.data.submittedCode,
     });
 
-    const attempt = await prisma.levelAttempt.create({
-      data: {
-        userId: req.userId,
-        levelId,
-        attemptNumber: attemptCount + 1,
-        submittedCode: parsed.data.submittedCode,
-        result: parsed.data.result,
-        feedback: parsed.data.feedback,
-        score: parsed.data.score,
-        completedAt: new Date(),
-      },
-    });
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const latestAttempt =
+          await tx.levelAttempt.findFirst({
+            where: {
+              userId: req.userId!,
+              levelId,
+            },
+            orderBy: {
+              attemptNumber: "desc",
+            },
+            select: {
+              attemptNumber: true,
+            },
+          });
+
+        const attempt =
+          await tx.levelAttempt.create({
+            data: {
+              userId: req.userId!,
+              levelId,
+              attemptNumber:
+                (latestAttempt?.attemptNumber ?? 0) + 1,
+              submittedCode:
+                parsed.data.submittedCode,
+              result: evaluation.result,
+              feedback: evaluation.feedback,
+              score: evaluation.score,
+              completedAt: new Date(),
+            },
+          });
+
+        const fileChanges = [];
+
+        if (evaluation.result === "PASSED") {
+          for (const change of parsed.data.fileChanges) {
+            const saved =
+              await saveProjectFileVersion(tx, {
+                projectId,
+                userId: req.userId!,
+                levelId,
+                path: change.path,
+                content: change.content,
+                language: change.language,
+                changeSummary:
+                  change.changeSummary ??
+                  `Applied by level attempt #${attempt.attemptNumber}.`,
+                generatedByAi: false,
+              });
+
+            fileChanges.push({
+              file: saved.file,
+              version: saved.version,
+            });
+          }
+        }
+
+        return {
+          attempt,
+          fileChanges,
+        };
+      }
+    );
 
     return res.status(201).json({
       success: true,
       message:
-        attempt.result === "PASSED"
-          ? "Attempt passed."
-          : "Attempt failed. Try again.",
-      attempt,
+        result.attempt.result === "PASSED"
+          ? "Attempt passed and project file changes were applied."
+          : "Attempt failed. Project files were not changed.",
+      attempt: result.attempt,
+      appliedFileChanges: result.fileChanges,
     });
   } catch (error) {
     console.error("Submit attempt failed:", error);
+
+    if (
+      error instanceof Error &&
+      error.message === "INVALID_PROJECT_FILE_PATH"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project file path.",
+      });
+    }
 
     return res.status(500).json({
       success: false,

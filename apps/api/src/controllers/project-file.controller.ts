@@ -1,9 +1,13 @@
-import path from "path";
 import { Response } from "express";
 
 import prisma from "../lib/prisma";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { saveProjectFileSchema } from "../schemas/project-file.schema";
+import {
+  isValidProjectPath,
+  normalizeProjectPath,
+  saveProjectFileVersion,
+} from "../services/project-file.service";
 
 async function findOwnedProject(
   projectId: string,
@@ -41,13 +45,6 @@ async function levelBelongsToProject(
   });
 
   return Boolean(level);
-}
-
-function normalizeProjectPath(value: string) {
-  return value
-    .replace(/\\/g, "/")
-    .replace(/^\/+/, "")
-    .replace(/\/+/g, "/");
 }
 
 export async function saveProjectFile(
@@ -104,13 +101,7 @@ export async function saveProjectFile(
       parsed.data.path
     );
 
-    if (
-      !normalizedPath ||
-      normalizedPath === "." ||
-      normalizedPath === ".." ||
-      normalizedPath.startsWith("../") ||
-      normalizedPath.includes("/../")
-    ) {
+    if (!isValidProjectPath(normalizedPath)) {
       return res.status(400).json({
         success: false,
         message: "Invalid project file path.",
@@ -132,106 +123,18 @@ export async function saveProjectFile(
       }
     }
 
-    const fileName = path.posix.basename(normalizedPath);
-
     const result = await prisma.$transaction(
       async (tx) => {
-        const existingFile =
-          await tx.projectFile.findUnique({
-            where: {
-              projectId_path: {
-                projectId,
-                path: normalizedPath,
-              },
-            },
-            include: {
-              versions: {
-                orderBy: {
-                  versionNumber: "desc",
-                },
-                take: 1,
-              },
-            },
-          });
-
-        if (!existingFile) {
-          const file = await tx.projectFile.create({
-            data: {
-              projectId,
-              path: normalizedPath,
-              fileName,
-              language: parsed.data.language,
-              isDeleted: false,
-            },
-          });
-
-          const version =
-            await tx.projectFileVersion.create({
-              data: {
-                fileId: file.id,
-                userId: req.userId!,
-                levelId: parsed.data.levelId,
-                versionNumber: 1,
-                content: parsed.data.content,
-                changeType: "CREATED",
-                changeSummary:
-                  parsed.data.changeSummary ??
-                  "Created project file.",
-                generatedByAi:
-                  parsed.data.generatedByAi,
-              },
-            });
-
-          return {
-            file,
-            version,
-          };
-        }
-
-        const latestVersion =
-          existingFile.versions[0];
-
-        const nextVersionNumber =
-          (latestVersion?.versionNumber ?? 0) + 1;
-
-        const file = await tx.projectFile.update({
-          where: {
-            id: existingFile.id,
-          },
-          data: {
-            fileName,
-            language:
-              parsed.data.language ??
-              existingFile.language,
-            isDeleted: false,
-          },
+        return saveProjectFileVersion(tx, {
+          projectId,
+          userId: req.userId!,
+          levelId: parsed.data.levelId,
+          path: normalizedPath,
+          content: parsed.data.content,
+          language: parsed.data.language,
+          changeSummary: parsed.data.changeSummary,
+          generatedByAi: parsed.data.generatedByAi,
         });
-
-        const version =
-          await tx.projectFileVersion.create({
-            data: {
-              fileId: existingFile.id,
-              userId: req.userId!,
-              levelId: parsed.data.levelId,
-              versionNumber: nextVersionNumber,
-              content: parsed.data.content,
-              changeType: existingFile.isDeleted
-                ? "RESTORED"
-                : "UPDATED",
-              changeSummary:
-                parsed.data.changeSummary ??
-                (existingFile.isDeleted
-                  ? "Restored project file."
-                  : "Updated project file."),
-              generatedByAi:
-                parsed.data.generatedByAi,
-            },
-          });
-
-        return {
-          file,
-          version,
-        };
       }
     );
 
@@ -248,6 +151,16 @@ export async function saveProjectFile(
     });
   } catch (error) {
     console.error("Save project file failed:", error);
+
+    if (
+      error instanceof Error &&
+      error.message === "INVALID_PROJECT_FILE_PATH"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project file path.",
+      });
+    }
 
     return res.status(500).json({
       success: false,
